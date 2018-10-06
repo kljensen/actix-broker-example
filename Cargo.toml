@@ -1,0 +1,13 @@
+[package]
+name = "actix-broker-example"
+version = "0.1.0"
+authors = ["Kyle L. Jensen <kljensen@gmail.com>"]
+
+[dependencies]
+actix-broker = "0.1.6"
+actix= "0.7.0"
+actix-web= "0.7.8"
+
+[[bin]]
+name = "actix-broker-example"
+path = "main.rs"
