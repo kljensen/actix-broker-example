@@ -1,13 +1,19 @@
 #[macro_use]
 extern crate actix;
-extern crate actix_web;
 extern crate actix_broker;
+extern crate actix_web;
 
-use actix::prelude::*;
-use actix_web::{server, App, Error, HttpRequest, HttpResponse};
+use actix::prelude::{Actor, Context, Handler, System};
 use actix_broker::{Broker, BrokerSubscribe};
+use actix_web::{server, App, Error, HttpRequest, HttpResponse};
+use std::cell::Cell;
 
-#[derive(Clone, Debug, Message)] 
+// This struct represents state
+struct AppState {
+    counter: Cell<usize>,
+}
+
+#[derive(Clone, Debug, Message)]
 struct Hello;
 
 struct TestActor;
@@ -28,21 +34,28 @@ impl Handler<Hello> for TestActor {
     }
 }
 
-fn index(_req: &HttpRequest) -> Result<HttpResponse, Error> {
+fn index(req: &HttpRequest<AppState>) -> Result<HttpResponse, Error> {
     Broker::issue_async(Hello);
-    Ok(HttpResponse::Ok().content_type("text/plain").body("Welcome!"))
+    let count = req.state().counter.get() + 1; // <- get count
+    req.state().counter.set(count); // <- store new count in state
+
+    // <- response with count
+    Ok(HttpResponse::Ok()
+        .content_type("text/plain")
+        .body(format!("Request number: {}", count)))
 }
 
 fn main() {
     System::run(|| {
         TestActor.start();
 
-        server::new(||
-            App::new()
-                .resource("/", |r| r.f(index)))
-            .bind("127.0.0.1:8080")
-            .unwrap()
-            .start();
+        server::new(|| {
+            App::with_state(AppState {
+                counter: Cell::new(0),
+            }).resource("/", |r| r.f(index))
+        }).bind("127.0.0.1:8080")
+        .unwrap()
+        .start();
         println!("Hit up 127.0.0.1:8080");
     });
 }
