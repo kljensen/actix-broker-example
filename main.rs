@@ -6,11 +6,11 @@ extern crate actix_web;
 use actix::prelude::{Actor, Context, Handler, System};
 use actix_broker::{Broker, BrokerSubscribe};
 use actix_web::{server, App, Error, HttpRequest, HttpResponse};
-use std::cell::Cell;
+use std::sync::{Arc, Mutex};
 
 // This struct represents state
 struct AppState {
-    counter: Cell<usize>,
+    counter: usize,
 }
 
 #[derive(Clone, Debug, Message)]
@@ -34,28 +34,25 @@ impl Handler<Hello> for TestActor {
     }
 }
 
-fn index(req: &HttpRequest<AppState>) -> Result<HttpResponse, Error> {
+fn index(req: &HttpRequest<Arc<Mutex<AppState>>>) -> Result<HttpResponse, Error> {
     Broker::issue_async(Hello);
-    let count = req.state().counter.get() + 1; // <- get count
-    req.state().counter.set(count); // <- store new count in state
-
-    // <- response with count
+    // let foo = req.state().count;
+    let mut state = req.state().lock().unwrap();
+    state.counter += 1;
     Ok(HttpResponse::Ok()
         .content_type("text/plain")
-        .body(format!("Request number: {}", count)))
+        .body(format!("Request number: {}", state.counter)))
 }
 
 fn main() {
     System::run(|| {
         TestActor.start();
 
-        server::new(|| {
-            App::with_state(AppState {
-                counter: Cell::new(0),
-            }).resource("/", |r| r.f(index))
-        }).bind("127.0.0.1:8080")
-        .unwrap()
-        .start();
+        let state = Arc::new(Mutex::new(AppState { counter: 0 }));
+        server::new(move || App::with_state(state.clone()).resource("/", |r| r.f(index)))
+            .bind("127.0.0.1:8080")
+            .unwrap()
+            .start();
         println!("Hit up 127.0.0.1:8080");
     });
 }
